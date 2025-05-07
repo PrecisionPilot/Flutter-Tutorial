@@ -1,6 +1,9 @@
+import 'dart:convert';
+
 import 'package:english_words/english_words.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:http/http.dart' as http;
 
 void main() {
   runApp(MyApp());
@@ -43,11 +46,19 @@ class MyAppState extends ChangeNotifier {
     }
     notifyListeners();
   }
+
+  var title = "Empty";
+  void setTitle(var t) {
+    title = t;
+    notifyListeners();
+  }
 }
 
 // ...
 
 class MyHomePage extends StatefulWidget {
+  const MyHomePage({super.key});
+
   @override
   State<MyHomePage> createState() => _MyHomePageState();
 }
@@ -65,6 +76,8 @@ class _MyHomePageState extends State<MyHomePage> {
       case 1:
         page = FavouritePage();
         break;
+      case 2:
+        page = YouTubePage();
       default:
         throw UnimplementedError('no widget for $selectedIndex');
     }
@@ -85,6 +98,10 @@ class _MyHomePageState extends State<MyHomePage> {
                     icon: Icon(Icons.favorite),
                     label: Text('Favorites'),
                   ),
+                  NavigationRailDestination(
+                    icon: Icon(Icons.play_arrow),
+                    label: Text('YouTube'),
+                  ),
                 ],
                 selectedIndex: selectedIndex,
                 onDestinationSelected: (value) {
@@ -104,6 +121,81 @@ class _MyHomePageState extends State<MyHomePage> {
         ),
       );
     });
+  }
+}
+
+Future<Album> fetchAlbum() async {
+  final response = await http
+      .get(Uri.parse('https://jsonplaceholder.typicode.com/albums/1'));
+
+  if (response.statusCode == 200) {
+    return Album.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  } else {
+    throw Exception('Failed to load album');
+  }
+}
+
+class Album {
+  final int userId;
+  final int id;
+  final String title;
+
+  const Album({required this.userId, required this.id, required this.title});
+
+  factory Album.fromJson(Map<String, dynamic> json) {
+    return switch (json) {
+      {'userId': int userId, 'id': int id, 'title': String title} => Album(
+          userId: userId,
+          id: id,
+          title: title,
+        ),
+      _ => throw const FormatException('Failed to load album.'),
+    };
+  }
+}
+
+class YouTubePage extends StatefulWidget {
+  @override
+  State<YouTubePage> createState() => _YouTubePageState();
+}
+
+class _YouTubePageState extends State<YouTubePage> {
+  Future<Album>? futureAlbum;
+
+  @override
+  Widget build(BuildContext context) {
+    var appState = context.watch<MyAppState>();
+
+    return Center(
+        child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        ElevatedButton(
+          onPressed: () {
+            setState(
+              () {
+                futureAlbum = fetchAlbum();
+              },
+            );
+          },
+          child: Text("Fetch"),
+        ),
+        const SizedBox(height: 16),
+        FutureBuilder<Album>(
+          future: futureAlbum,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const CircularProgressIndicator();
+            } else if (snapshot.hasError) {
+              return Text('Error: ${snapshot.error}');
+            } else if (snapshot.hasData) {
+              return Text(snapshot.data!.title);
+            }
+            return const Text('Press Fetch');
+          },
+        )
+      ],
+    ));
   }
 }
 
@@ -139,6 +231,8 @@ class FavouritePage extends StatelessWidget {
 }
 
 class GeneratorPage extends StatelessWidget {
+  const GeneratorPage({super.key});
+
   @override
   Widget build(BuildContext context) {
     var appState = context.watch<MyAppState>();
